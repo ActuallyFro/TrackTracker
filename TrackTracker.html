@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrackTracker</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #3b82f6;
+                --primary-hover: #60a5fa;
+                --bg-body: #0f172a;
+                --bg-card: #1e293b;
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --border: #334155;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.5;
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        nav {
+            display: flex;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        nav button {
+            flex: 1;
+            padding: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+
+        nav button.active {
+            border-bottom-color: var(--primary);
+            color: var(--primary);
+        }
+
+        main {
+            padding: 1rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        section {
+            display: none;
+        }
+
+        section.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        h2 { margin-bottom: 1rem; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-card);
+            color: var(--text-main);
+        }
+
+        button.btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+        }
+
+        button.btn:hover { background-color: var(--primary-hover); }
+        button.btn-danger { background-color: var(--danger); margin-top: 1rem; }
+
+        .list-group {
+            list-style: none;
+            margin-top: 1rem;
+        }
+        .list-item {
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            background: var(--bg-card);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>TrackTracker v0.1.0</h1>
+        <div>
+            <button onclick="app.exportData()" style="padding: 0.5rem; cursor:pointer;">Export JSON</button>
+        </div>
+    </header>
+
+    <nav>
+        <button class="nav-btn active" data-target="dashboard">Dashboard</button>
+        <button class="nav-btn" data-target="athletes">Athletes</button>
+        <button class="nav-btn" data-target="meets">Meets</button>
+        <button class="nav-btn" data-target="results">Results</button>
+    </nav>
+
+    <main>
+        <!-- DASHBOARD -->
+        <section id="dashboard" class="active">
+            <div class="card">
+                <h2>Welcome to TrackTracker SPA</h2>
+                <p>Manage Ohio Middle School Track and Field (2026) data offline.</p>
+                <div class="controls" style="margin-top: 1rem">
+                    <button class="btn" onclick="document.getElementById('import-file').click()">Import JSON</button>
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="app.importData(event)">
+                </div>
+            </div>
+            <div class="card">
+                <h3>Statistics</h3>
+                <p>Total Athletes: <span id="stat-athletes">0</span></p>
+                <p>Total Meets: <span id="stat-meets">0</span></p>
+                <p>Total Results: <span id="stat-results">0</span></p>
+            </div>
+        </section>
+
+        <!-- ATHLETES -->
+        <section id="athletes">
+            <div class="card">
+                <h2>Add Athlete</h2>
+                <form id="form-athlete" onsubmit="app.addAthlete(event)">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="ath-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Gender</label>
+                        <select id="ath-gender" required>
+                            <option value="Girls">Girls</option>
+                            <option value="Boys">Boys</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Grade Level</label>
+                        <input type="number" id="ath-grade" min="6" max="8" value="7" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Team/School</label>
+                        <input type="text" id="ath-team" required>
+                    </div>
+                    <button type="submit" class="btn">Save Athlete</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>Athlete List</h2>
+                <ul class="list-group" id="list-athletes"></ul>
+            </div>
+        </section>
+
+        <!-- MEETS -->
+        <section id="meets">
+            <div class="card">
+                <h2>Add Meet</h2>
+                <form id="form-meet" onsubmit="app.addMeet(event)">
+                    <div class="form-group">
+                        <label>Meet Name</label>
+                        <input type="text" id="meet-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="meet-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" id="meet-location">
+                    </div>
+                    <button type="submit" class="btn">Save Meet</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>Meet List</h2>
+                <ul class="list-group" id="list-meets"></ul>
+            </div>
+        </section>
+
+        <!-- RESULTS -->
+        <section id="results">
+            <div class="card">
+                <h2>Add Result</h2>
+                <form id="form-result" onsubmit="app.addResult(event)">
+                    <div class="form-group">
+                        <label>Meet</label>
+                        <select id="res-meet" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Athlete</label>
+                        <select id="res-athlete" required onchange="app.updateEventDropdown()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Event</label>
+                        <select id="res-event" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Result/Performance</label>
+                        <input type="text" id="res-value" placeholder="MM:SS.MS or FT-IN" required>
+                    </div>
+                    <button type="submit" class="btn">Save Result</button>
+                </form>
+            </div>
+            <div class="card" style="overflow-x: auto;">
+                <h2>Results Database</h2>
+                <div class="form-group">
+                    <input type="text" id="filter-results" placeholder="Search by name, event, meet..." onkeyup="app.renderResultsTable()">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Meet</th>
+                            <th>Athlete</th>
+                            <th>Event</th>
+                            <th>Result</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-results"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Data Models
+        const OHIO_EVENTS = {
+            "Girls": [
+                { id: "g1", category: "track", name: "1 - Relay - 4x800 meters" },
+                { id: "g3", category: "track", name: "3 - Hurdles - 100 meters (33\" high)" },
+                { id: "g5", category: "track", name: "5 - Dash - 100 meters" },
+                { id: "g7", category: "track", name: "7 - Relay - 4x200 meters" },
+                { id: "g9", category: "track", name: "9 - Run - 1600 meters" },
+                { id: "g11", category: "track", name: "11 - Relay - 4x100 meters" },
+                { id: "g13", category: "track", name: "13 - Dash - 400 meters" },
+                { id: "g15", category: "track", name: "15 - Low Hurdles - 300 meters (30\" high)" },
+                { id: "g17", category: "track", name: "17 - Run - 800 meters" },
+                { id: "g19", category: "track", name: "19 - Dash - 200 meters" },
+                { id: "g21", category: "track", name: "21 - Relay - 4x400 meters" },
+                { id: "gf1", category: "field", name: "Discus (1K)" },
+                { id: "gf2", category: "field", name: "High Jump" },
+                { id: "gf3", category: "field", name: "Long Jump" },
+                { id: "gf4", category: "field", name: "Shot Put (4K)" }
+            ],
+            "Boys": [
+                { id: "b2", category: "track", name: "2 - Relay - 4x800 meters" },
+                { id: "b4", category: "track", name: "4 - High Hurdles - 110 meters (39\" high)" },
+                { id: "b6", category: "track", name: "6 - Dash - 100 meters" },
+                { id: "b8", category: "track", name: "8 - Relay - 4x200 meters" },
+                { id: "b10", category: "track", name: "10 - Run - 1600 meters" },
+                { id: "b12", category: "track", name: "12 - Relay - 4x100 meters" },
+                { id: "b14", category: "track", name: "14 - Dash - 400 meters" },
+                { id: "b16", category: "track", name: "16 - Hurdles - 300 meters (36\" high)" },
+                { id: "b18", category: "track", name: "18 - Run - 800 meters" },
+                { id: "b20", category: "track", name: "20 - Dash - 200 meters" },
+                { id: "b22", category: "track", name: "22 - Relay - 4x400 meters" },
+                { id: "bf1", category: "field", name: "Discus (1.6K)" },
+                { id: "bf2", category: "field", name: "High Jump" },
+                { id: "bf3", category: "field", name: "Long Jump" },
+                { id: "bf4", category: "field", name: "Shot Put (5.4K)" }
+            ]
+        };
+
+        const generateUUID = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+        const app = {
+            data: { athletes: [], meets: [], results: [] },
+
+            init() {
+                this.loadData();
+                this.setupNav();
+                this.refreshUI();
+            },
+
+            loadData() {
+                const stored = localStorage.getItem('trackTrackerData');
+                if (stored) {
+                    try {
+                        this.data = JSON.parse(stored);
+                    } catch (e) {
+                        console.error('Failed to parse local storage data');
+                    }
+                }
+            },
+
+            saveData() {
+                localStorage.setItem('trackTrackerData', JSON.stringify(this.data));
+                this.refreshUI();
+            },
+
+            setupNav() {
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+                        
+                        e.target.classList.add('active');
+                        document.getElementById(e.target.dataset.target).classList.add('active');
+                    });
+                });
+            },
+
+            refreshUI() {
+                document.getElementById('stat-athletes').textContent = this.data.athletes.length;
+                document.getElementById('stat-meets').textContent = this.data.meets.length;
+                document.getElementById('stat-results').textContent = this.data.results.length;
+
+                this.renderAthletes();
+                this.renderMeets();
+                this.renderDropdowns();
+                this.renderResultsTable();
+            },
+
+            // --- ATHLETES ---
+            addAthlete(e) {
+                e.preventDefault();
+                const athlete = {
+                    id: generateUUID(),
+                    name: document.getElementById('ath-name').value,
+                    gender: document.getElementById('ath-gender').value,
+                    grade: document.getElementById('ath-grade').value,
+                    team: document.getElementById('ath-team').value
+                };
+                this.data.athletes.push(athlete);
+                this.saveData();
+                e.target.reset();
+            },
+
+            deleteAthlete(id) {
+                if(confirm('Delete athlete and all their results?')) {
+                    this.data.athletes = this.data.athletes.filter(a => a.id !== id);
+                    this.data.results = this.data.results.filter(r => r.athleteId !== id);
+                    this.saveData();
+                }
+            },
+
+            renderAthletes() {
+                const list = document.getElementById('list-athletes');
+                list.innerHTML = this.data.athletes.map(a => `
+                    <li class="list-item">
+                        <div>
+                            <strong>${a.name}</strong> (${a.gender}, Gr ${a.grade}) - ${a.team}
+                        </div>
+                        <button onclick="app.deleteAthlete('${a.id}')" style="color:red; background:none; border:none; cursor:pointer;">Delete</button>
+                    </li>
+                `).join('');
+            },
+
+            // --- MEETS ---
+            addMeet(e) {
+                e.preventDefault();
+                const meet = {
+                    id: generateUUID(),
+                    name: document.getElementById('meet-name').value,
+                    date: document.getElementById('meet-date').value,
+                    location: document.getElementById('meet-location').value
+                };
+                this.data.meets.push(meet);
+                this.data.meets.sort((a,b) => new Date(b.date) - new Date(a.date));
+                this.saveData();
+                e.target.reset();
+            },
+
+            deleteMeet(id) {
+                if(confirm('Delete meet and all its results?')) {
+                    this.data.meets = this.data.meets.filter(m => m.id !== id);
+                    this.data.results = this.data.results.filter(r => r.meetId !== id);
+                    this.saveData();
+                }
+            },
+
+            renderMeets() {
+                const list = document.getElementById('list-meets');
+                list.innerHTML = this.data.meets.map(m => `
+                    <li class="list-item">
+                        <div>
+                            <strong>${m.name}</strong> (${m.date}) - ${m.location}
+                        </div>
+                        <button onclick="app.deleteMeet('${m.id}')" style="color:red; background:none; border:none; cursor:pointer;">Delete</button>
+                    </li>
+                `).join('');
+            },
+
+            // --- RESULTS ---
+            renderDropdowns() {
+                const athSelect = document.getElementById('res-athlete');
+                athSelect.innerHTML = '<option value="">Select Athlete...</option>' + 
+                    this.data.athletes.map(a => `<option value="${a.id}">${a.name} (${a.gender})</option>`).join('');
+
+                const meetSelect = document.getElementById('res-meet');
+                meetSelect.innerHTML = '<option value="">Select Meet...</option>' + 
+                    this.data.meets.map(m => `<option value="${m.id}">${m.name} - ${m.date}</option>`).join('');
+                
+                this.updateEventDropdown();
+            },
+
+            updateEventDropdown() {
+                const athId = document.getElementById('res-athlete').value;
+                const evtSelect = document.getElementById('res-event');
+                if(!athId) {
+                    evtSelect.innerHTML = '<option value="">Select athlete first</option>';
+                    return;
+                }
+                
+                const athlete = this.data.athletes.find(a => a.id === athId);
+                const events = OHIO_EVENTS[athlete.gender] || [];
+                
+                evtSelect.innerHTML = events.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+            },
+
+            addResult(e) {
+                e.preventDefault();
+                const result = {
+                    id: generateUUID(),
+                    meetId: document.getElementById('res-meet').value,
+                    athleteId: document.getElementById('res-athlete').value,
+                    eventName: document.getElementById('res-event').value,
+                    value: document.getElementById('res-value').value
+                };
+                this.data.results.push(result);
+                this.saveData();
+                document.getElementById('res-value').value = ''; // keep meet/athlete selected for quick add
+            },
+
+            deleteResult(id) {
+                if(confirm('Delete result?')) {
+                    this.data.results = this.data.results.filter(r => r.id !== id);
+                    this.saveData();
+                }
+            },
+
+            renderResultsTable() {
+                const tbody = document.getElementById('table-results');
+                const filterText = document.getElementById('filter-results').value.toLowerCase();
+                
+                let html = '';
+                
+                // Decorate results with related data for sorting/filtering
+                const enriched = this.data.results.map(r => {
+                    const meet = this.data.meets.find(m => m.id === r.meetId) || {};
+                    const athlete = this.data.athletes.find(a => a.id === r.athleteId) || {};
+                    return { ...r, meet, athlete };
+                });
+
+                // Sort by date desc
+                enriched.sort((a,b) => new Date(b.meet.date || 0) - new Date(a.meet.date || 0));
+
+                enriched.forEach(r => {
+                    const searchStr = `${r.meet.name} ${r.athlete.name} ${r.eventName} ${r.value}`.toLowerCase();
+                    if(filterText && !searchStr.includes(filterText)) return;
+
+                    html += `
+                        <tr>
+                            <td>${r.meet.date || 'Unknown'}</td>
+                            <td>${r.meet.name || 'Unknown'}</td>
+                            <td>${r.athlete.name || 'Unknown'}</td>
+                            <td>${r.eventName}</td>
+                            <td><strong>${r.value}</strong></td>
+                            <td><button onclick="app.deleteResult('${r.id}')" style="color:red; background:none; border:none; cursor:pointer;">Del</button></td>
+                        </tr>
+                    `;
+                });
+                
+                tbody.innerHTML = html;
+            },
+
+            // --- IMPORT / EXPORT ---
+            exportData() {
+                const blob = new Blob([JSON.stringify(this.data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `TrackTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            },
+
+            importData(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        if (importedData.athletes && importedData.meets && importedData.results) {
+                            this.data = importedData;
+                            this.saveData();
+                            alert('Data imported successfully!');
+                        } else {
+                            alert('Invalid TrackTracker JSON format.');
+                        }
+                    } catch (err) {
+                        alert('Error reading JSON file.');
+                    }
+                    e.target.value = ''; // reset file input
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        // Boot
+        app.init();
+    </script>
+</body>
+</html>
