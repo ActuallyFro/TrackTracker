@@ -178,7 +178,7 @@
     <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <header>
-        <h1>TrackTracker v0.2.0</h1>
+        <h1>TrackTracker v0.4.0</h1>
         <div style="display:flex; gap:1rem; align-items:center;">
             <button class="icon-btn" onclick="app.toggleEditMode()" id="btn-edit-mode" title="Enable Edit Mode">🔒</button>
             <button class="icon-btn" onclick="app.openSettings()" title="Settings & Backup">⚙️</button>
@@ -187,9 +187,10 @@
 
     <nav>
         <button class="nav-btn active" data-target="results" id="nav-btn-results" title="View historical results database">Results</button>
-        <button class="nav-btn" data-target="recorder" title="Input new meet performances">Recorder</button>
-        <button class="nav-btn" data-target="meets" title="Manage your track meets">Meets</button>
-        <button class="nav-btn" data-target="athletes" title="Manage your athletes">Athletes</button>
+        <button class="nav-btn" data-target="stopwatch" title="Manual stopwatch timing">Stopwatch</button>
+        <button class="nav-btn" data-target="recorder" title="Input historic performances">Recorder</button>
+        <button class="nav-btn" data-target="setup" title="Manage meets and athletes">Event Setup</button>
+        <button class="nav-btn" data-target="events" title="Reference list of official events">Events</button>
     </nav>
 
     <main>
@@ -232,6 +233,7 @@
                             <th>Athlete</th>
                             <th>Event</th>
                             <th>Result</th>
+                            <th>Type</th>
                             <th class="action-header" style="display:none;">Action</th>
                         </tr>
                     </thead>
@@ -240,7 +242,58 @@
             </div>
         </section>
 
-        <!-- 2. RECORDER TAB (New Location for Data Entry) -->
+        <!-- STOPWATCH TAB -->
+        <section id="stopwatch">
+            <div class="card" style="text-align: center;">
+                <h2>Digital Stopwatch</h2>
+                
+                <div style="font-size: 5rem; font-family: monospace; font-weight: bold; margin: 1rem 0; color: var(--text-main);" id="sw-display">00:00.00</div>
+                
+                <div style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 2rem;">
+                    <button class="btn" id="sw-btn-start" style="flex:1; font-size:1.2rem; background-color: var(--primary);" onclick="app.swStart()">Start</button>
+                    <button class="btn" id="sw-btn-split" style="flex:1; font-size:1.2rem; background-color: var(--secondary); display: none;" onclick="app.swSplit()">Split (Next Leg)</button>
+                    <button class="btn" id="sw-btn-stop" style="flex:1; font-size:1.2rem; background-color: var(--danger); display: none;" onclick="app.swStop()">Stop</button>
+                    <button class="btn" id="sw-btn-reset" style="flex:1; font-size:1.2rem; background-color: var(--text-muted);" onclick="app.swResetAlert()">Reset</button>
+                </div>
+
+                <div id="sw-splits-container" style="display: none; text-align: left; background: var(--bg-body); padding: 1rem; border-radius: 4px; border: 1px solid var(--border); margin-bottom: 1rem;">
+                    <h3 style="margin-top:0;">Relay Splits</h3>
+                    <ul class="list-group" id="sw-splits-list"></ul>
+                </div>
+
+                <div style="text-align: left; background: var(--bg-body); padding: 1rem; border-radius: 4px; border: 1px solid var(--border);">
+                    <h3 style="margin-top:0;">Timing Context</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                        <div class="form-group">
+                            <label>Meet</label>
+                            <select id="sw-meet" required onchange="app.checkSwWarning(event, () => app.saveStopwatchState())"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Athlete (or Team)</label>
+                            <select id="sw-athlete" required onchange="app.checkSwWarning(event, () => { app.updateStopwatchEventDropdown(); app.saveStopwatchState(); })"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Event</label>
+                            <select id="sw-event" required onchange="app.checkSwWarning(event, () => { app.saveStopwatchState(); app.adaptStopwatchUI(); })"></select>
+                        </div>
+                    </div>
+
+                    <div id="sw-relay-runners" style="display: none; margin-top: 1rem;">
+                        <label>Relay Runners (Optional)</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                            <select id="sw-leg-1" class="sw-runner-sel"><option value="">Ghost Runner 1</option></select>
+                            <select id="sw-leg-2" class="sw-runner-sel"><option value="">Ghost Runner 2</option></select>
+                            <select id="sw-leg-3" class="sw-runner-sel"><option value="">Ghost Runner 3</option></select>
+                            <select id="sw-leg-4" class="sw-runner-sel"><option value="">Ghost Runner 4</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn" id="sw-btn-save" style="width: 100%; display: none; margin-top: 1rem; font-size: 1.2rem;" onclick="app.swSave()">Save Time(s) to Results</button>
+            </div>
+        </section>
+
+        <!-- 2. RECORDER TAB -->
         <section id="recorder">
             <div class="card">
                 <h2>Record Performance</h2>
@@ -277,72 +330,95 @@
                             <option value="Attempt 4">Attempt 4</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Result/Performance</label>
-                        <input type="text" id="res-value" placeholder="15.2 or 18-5" required title="Enter time (15.2) or distance (18-5)">
-                        <small style="font-size: 0.8rem; color: var(--text-muted);">Will auto-format to MM:SS.MS (e.g., 00:15.20) or FT-IN.xx (e.g., 18-05.00)</small>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Result/Performance</label>
+                            <input type="text" id="res-value" placeholder="15.2 or 18-5" required title="Enter time (15.2) or distance (18-5)">
+                            <small style="font-size: 0.8rem; color: var(--text-muted);">Auto-formats to MM:SS.MS or FT-IN.xx</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Timing Type</label>
+                            <select id="res-type" required title="Method used to record the time (only applicable to track)">
+                                <option value="HAND">HAND</option>
+                                <option value="COMP">COMP</option>
+                                <option value="WTCH">WTCH</option>
+                            </select>
+                        </div>
                     </div>
                     <button type="submit" class="btn" title="Save this performance record">Save Result</button>
                 </form>
             </div>
         </section>
 
-        <!-- 3. MEETS TAB -->
-        <section id="meets">
-            <div class="card">
-                <h2>Add Meet</h2>
-                <form id="form-meet" onsubmit="app.addMeet(event)">
-                    <div class="form-group">
-                        <label>Meet Name</label>
-                        <input type="text" id="meet-name" required title="Enter the name of the track meet (e.g., 'County Invitational')">
+        <!-- 4. EVENT SETUP TAB (Merged Meets & Athletes) -->
+        <section id="setup">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                <!-- MEETS COLUMN -->
+                <div>
+                    <div class="card">
+                        <h2>Add Meet</h2>
+                        <form id="form-meet" onsubmit="app.addMeet(event)">
+                            <div class="form-group">
+                                <label>Meet Name</label>
+                                <input type="text" id="meet-name" required title="Enter the name of the track meet (e.g., 'County Invitational')">
+                            </div>
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="date" id="meet-date" required title="Select the calendar date of the meet">
+                            </div>
+                            <div class="form-group">
+                                <label>Location</label>
+                                <input type="text" id="meet-location" title="Enter the host school or facility name (optional)">
+                            </div>
+                            <button type="submit" class="btn" title="Add this meet to your season record">Save Meet</button>
+                        </form>
                     </div>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="meet-date" required title="Select the calendar date of the meet">
+                    <div class="card">
+                        <h2>Meet List</h2>
+                        <ul class="list-group" id="list-meets"></ul>
                     </div>
-                    <div class="form-group">
-                        <label>Location</label>
-                        <input type="text" id="meet-location" title="Enter the host school or facility name (optional)">
+                </div>
+
+                <!-- ATHLETES COLUMN -->
+                <div>
+                    <div class="card">
+                        <h2>Add Athlete</h2>
+                        <form id="form-athlete" onsubmit="app.addAthlete(event)">
+                            <div class="form-group">
+                                <label>Name</label>
+                                <input type="text" id="ath-name" required title="Enter the athlete's first and last name">
+                            </div>
+                            <div class="form-group">
+                                <label>Gender (Division)</label>
+                                <select id="ath-gender" required title="Selecting gender ensures the proper Ohio event choices appear in the Recorder">
+                                    <option value="Girls">Girls</option>
+                                    <option value="Boys">Boys</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Grade Level</label>
+                                <input type="number" id="ath-grade" min="6" max="8" value="7" required title="Enter the athlete's current Middle School grade (6-8)">
+                            </div>
+                            <div class="form-group">
+                                <label>Team/School</label>
+                                <input type="text" id="ath-team" required title="Enter the school name representing this athlete">
+                            </div>
+                            <button type="submit" class="btn" title="Add athlete to your roster">Save Athlete</button>
+                        </form>
                     </div>
-                    <button type="submit" class="btn" title="Add this meet to your season record">Save Meet</button>
-                </form>
-            </div>
-            <div class="card">
-                <h2>Meet List</h2>
-                <ul class="list-group" id="list-meets"></ul>
+                    <div class="card">
+                        <h2>Athlete List</h2>
+                        <ul class="list-group" id="list-athletes"></ul>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- 4. ATHLETES TAB -->
-        <section id="athletes">
+        <!-- 5. EVENTS TAB -->
+        <section id="events">
             <div class="card">
-                <h2>Add Athlete</h2>
-                <form id="form-athlete" onsubmit="app.addAthlete(event)">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="ath-name" required title="Enter the athlete's first and last name">
-                    </div>
-                    <div class="form-group">
-                        <label>Gender (Division)</label>
-                        <select id="ath-gender" required title="Selecting gender ensures the proper Ohio event choices appear in the Recorder">
-                            <option value="Girls">Girls</option>
-                            <option value="Boys">Boys</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Grade Level</label>
-                        <input type="number" id="ath-grade" min="6" max="8" value="7" required title="Enter the athlete's current Middle School grade (6-8)">
-                    </div>
-                    <div class="form-group">
-                        <label>Team/School</label>
-                        <input type="text" id="ath-team" required title="Enter the school name representing this athlete">
-                    </div>
-                    <button type="submit" class="btn" title="Add athlete to your roster">Save Athlete</button>
-                </form>
-            </div>
-            <div class="card">
-                <h2>Athlete List</h2>
-                <ul class="list-group" id="list-athletes"></ul>
+                <h2>Ohio Middle School Track & Field Events</h2>
+                <div id="events-static-tables" style="display: flex; gap: 1rem; flex-wrap: wrap;"></div>
             </div>
         </section>
     </main>
@@ -542,6 +618,7 @@
                 this.renderMeets();
                 this.renderDropdowns();
                 this.renderResultsTable();
+                this.renderEventsTables();
                 this.updateResultsBadge();
             },
 
@@ -780,12 +857,16 @@
             renderDropdowns() {
                 // Populate Add Result (Recorder) Dropdowns
                 const athSelect = document.getElementById('res-athlete');
-                athSelect.innerHTML = '<option value="">Select Athlete...</option>' + 
+                const athOpts = '<option value="">Select Athlete...</option>' + 
                     this.data.athletes.map(a => `<option value="${a.id}">${a.name} (${a.gender})</option>`).join('');
+                athSelect.innerHTML = athOpts;
+                document.getElementById('sw-athlete').innerHTML = athOpts;
 
                 const meetSelect = document.getElementById('res-meet');
-                meetSelect.innerHTML = '<option value="">Select Meet...</option>' + 
+                const meetOpts = '<option value="">Select Meet...</option>' + 
                     this.data.meets.map(m => `<option value="${m.id}">${m.name} - ${m.date}</option>`).join('');
+                meetSelect.innerHTML = meetOpts;
+                document.getElementById('sw-meet').innerHTML = meetOpts;
                 
                 // Populate Filter Dropdowns
                 document.getElementById('filter-meet').innerHTML = '<option value="">All Meets</option>' + 
@@ -800,6 +881,9 @@
 
                 this.updateEventDropdown();
                 this.loadRecorderState();
+                
+                this.updateStopwatchEventDropdown();
+                this.loadStopwatchState();
             },
 
             updateEventDropdown() {
@@ -882,7 +966,8 @@
                     eventName: document.getElementById('res-event').value,
                     leg: isRelay ? document.getElementById('res-leg').value : null,
                     attempt: isField ? document.getElementById('res-attempt').value : null,
-                    value: rawValue
+                    value: rawValue,
+                    type: document.getElementById('res-type') ? document.getElementById('res-type').value : 'HAND'
                 };
                 
                 this.data.results.push(result);
@@ -950,12 +1035,342 @@
                                 ${r.attempt ? `<br><small style="color:var(--text-muted)">(${r.attempt})</small>` : ''}
                             </td>
                             <td><strong>${r.value}</strong></td>
+                            <td><small>${r.type || 'HAND'}</small></td>
                             ${this.isEditMode ? `<td class="action-header"><button onclick="app.deleteResult('${r.id}')" style="color:var(--danger); background:none; border:none; cursor:pointer;" title="Delete Result">Del</button></td>` : ''}
                         </tr>
                     `;
                 });
                 
                 tbody.innerHTML = html;
+            },
+
+            renderEventsTables() {
+                const container = document.getElementById('events-static-tables');
+                if(!container) return;
+                
+                function buildTable(title, events) {
+                    let rows = events.map((e, idx) => `<tr><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${idx + 1}</td><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${e.name}</td></tr>`).join('');
+                    return `<div style="flex:1; background:var(--bg-card); padding:1rem; border:1px solid var(--border); border-radius:4px; min-width:300px;">
+                        <h3 style="margin-top:0;">${title}</h3>
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                            <thead><tr><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem;">#</th><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem;">Event Name</th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+                }
+
+                const girlsTrack = OHIO_EVENTS.Girls.filter(e => e.category === 'track');
+                const boysTrack = OHIO_EVENTS.Boys.filter(e => e.category === 'track');
+                const girlsField = OHIO_EVENTS.Girls.filter(e => e.category === 'field');
+                const boysField = OHIO_EVENTS.Boys.filter(e => e.category === 'field');
+
+                container.innerHTML = 
+                    `<div style="width:100%; margin-bottom: 2rem;">
+                         <h3 style="margin-top:0;">Track Events</h3>
+                         <div style="display:flex; flex-wrap:wrap; gap:1rem;">
+                             ${buildTable('Girls', girlsTrack)}
+                             ${buildTable('Boys', boysTrack)}
+                         </div>
+                     </div>
+                     <div style="width:100%;">
+                         <h3 style="margin-top:0;">Field Events</h3>
+                         <div style="display:flex; flex-wrap:wrap; gap:1rem;">
+                             ${buildTable('Girls', girlsField)}
+                             ${buildTable('Boys', boysField)}
+                         </div>
+                     </div>`;
+            },
+
+            // --- STOPWATCH LOGIC ---
+            swState: {
+                running: false,
+                startTime: 0,
+                elapsedTime: 0,
+                interval: null,
+                splits: []
+            },
+            
+            checkSwWarning(e, onConfirm) {
+                if (this.swState.elapsedTime > 0 || this.swState.running) {
+                    if(!confirm('Warning: You have active stopwatch data! Changing settings or resetting will throw it away. Continue?')) {
+                        // revert logic would go here, but simple reset is fine for UI for now
+                        e.preventDefault();
+                        this.loadStopwatchState(); // restore old state immediately
+                        return;
+                    }
+                }
+                this.swResetAlertConfirmed();
+                if(onConfirm) onConfirm();
+            },
+
+            swResetAlert() {
+                if (this.swState.elapsedTime > 0 || this.swState.running) {
+                    if(!confirm('Are you sure you want to reset the stopwatch entirely?')) return;
+                }
+                this.swResetAlertConfirmed();
+            },
+
+            swResetAlertConfirmed() {
+                this.swReset();
+            },
+
+            updateStopwatchEventDropdown() {
+                const athId = document.getElementById('sw-athlete').value;
+                const swEvent = document.getElementById('sw-event');
+                if(!athId) {
+                    swEvent.innerHTML = '';
+                    return;
+                }
+
+                const athlete = this.data.athletes.find(a => a.id === athId);
+                const isBoy = athlete && athlete.gender === 'Boys';
+                const events = isBoy ? OHIO_EVENTS['Boys'] : OHIO_EVENTS['Girls'];
+                
+                swEvent.innerHTML = events.filter(e => e.category === 'track').map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+                this.adaptStopwatchUI();
+            },
+            
+            adaptStopwatchUI() {
+                const eventName = document.getElementById('sw-event').value || '';
+                const isRelay = eventName.toLowerCase().includes('relay');
+                const splitBtn = document.getElementById('sw-btn-split');
+                const runnersUI = document.getElementById('sw-relay-runners');
+                
+                if(isRelay) {
+                    runnersUI.style.display = 'block';
+                    if(this.swState.running && this.swState.splits.length < 3) {
+                        splitBtn.style.display = 'block';
+                    } else {
+                        splitBtn.style.display = 'none';
+                    }
+                    this.populateRelayRunnersDropdowns();
+                } else {
+                    runnersUI.style.display = 'none';
+                    splitBtn.style.display = 'none';
+                }
+            },
+            
+            populateRelayRunnersDropdowns() {
+                const options = `<option value="">Ghost Runner</option>` + this.data.athletes.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+                for(let i=1; i<=4; i++) {
+                    const el = document.getElementById('sw-leg-' + i);
+                    const currentVal = el.value;
+                    el.innerHTML = options;
+                    // Retain value if possible, else ghost
+                    if ([...el.options].some(o => o.value === currentVal)) el.value = currentVal;
+                    
+                    // Simple drag & drop swapping
+                    el.draggable = true;
+                    el.ondragstart = (e) => { e.dataTransfer.setData('text/plain', i); };
+                    el.ondragover = (e) => { e.preventDefault(); };
+                    el.ondrop = (e) => {
+                        e.preventDefault();
+                        const fromIdx = e.dataTransfer.getData('text/plain');
+                        const fromEl = document.getElementById('sw-leg-' + fromIdx);
+                        const temp = el.value;
+                        el.value = fromEl.value;
+                        fromEl.value = temp;
+                    };
+                }
+            },
+            
+            formatSwTime(ms) {
+                const d = new Date(ms);
+                const mins = d.getUTCMinutes().toString().padStart(2, '0');
+                const secs = d.getUTCSeconds().toString().padStart(2, '0');
+                const msecs = Math.floor(d.getUTCMilliseconds() / 10).toString().padStart(2, '0');
+                return `${mins}:${secs}.${msecs}`;
+            },
+            
+            swUpdateDisplay() {
+                const now = Date.now();
+                const total = this.swState.elapsedTime + (this.swState.running ? (now - this.swState.startTime) : 0);
+                document.getElementById('sw-display').textContent = this.formatSwTime(total);
+            },
+            
+            swStart() {
+                if (this.swState.running) return;
+                this.swState.running = true;
+                this.swState.startTime = Date.now();
+                this.swState.interval = setInterval(() => this.swUpdateDisplay(), 10);
+                
+                document.getElementById('sw-btn-start').style.display = 'none';
+                document.getElementById('sw-btn-stop').style.display = 'block';
+                document.getElementById('sw-btn-save').style.display = 'none';
+                
+                this.adaptStopwatchUI();
+            },
+            
+            swStop() {
+                if (!this.swState.running) return;
+                
+                // Final leg checks
+                const eventName = document.getElementById('sw-event').value || '';
+                const isRelay = eventName.toLowerCase().includes('relay');
+                const maxSplits = isRelay ? 4 : 0;
+                
+                if (isRelay && this.swState.splits.length < maxSplits) {
+                    const now = Date.now();
+                    const total = this.swState.elapsedTime + (now - this.swState.startTime);
+                    const prev = this.swState.splits.length > 0 ? this.swState.splits[this.swState.splits.length - 1].totalMs : 0;
+                    const splitTime = total - prev;
+                    
+                    this.swState.splits.push({
+                        leg: `Leg ${this.swState.splits.length + 1}`,
+                        splitMs: splitTime,
+                        totalMs: total
+                    });
+                    this.renderSplits();
+                }
+
+                // Finish stopping
+                this.swState.running = false;
+                clearInterval(this.swState.interval);
+                this.swState.elapsedTime += (Date.now() - this.swState.startTime);
+                this.swUpdateDisplay();
+                
+                document.getElementById('sw-btn-start').style.display = 'block';
+                document.getElementById('sw-btn-start').textContent = 'Resume';
+                
+                // Hard check to block resolving beyond max counts
+                if (isRelay && this.swState.splits.length >= maxSplits) {
+                    document.getElementById('sw-btn-start').style.display = 'none'; // Prevent resume if race is full
+                }
+
+                document.getElementById('sw-btn-stop').style.display = 'none';
+                document.getElementById('sw-btn-split').style.display = 'none';
+                document.getElementById('sw-btn-save').style.display = 'block';
+                
+                this.adaptStopwatchUI();
+            },
+            
+            swSplit() {
+                if (!this.swState.running) return;
+                
+                const eventName = document.getElementById('sw-event').value || '';
+                const isRelay = eventName.toLowerCase().includes('relay');
+                const maxSplits = isRelay ? 4 : 0;
+                
+                if (this.swState.splits.length >= maxSplits) {
+                    this.swStop();
+                    return;
+                }
+
+                const now = Date.now();
+                const total = this.swState.elapsedTime + (now - this.swState.startTime);
+                const prev = this.swState.splits.length > 0 ? this.swState.splits[this.swState.splits.length - 1].totalMs : 0;
+                const splitTime = total - prev;
+                
+                this.swState.splits.push({
+                    leg: `Leg ${this.swState.splits.length + 1}`,
+                    splitMs: splitTime,
+                    totalMs: total
+                });
+                
+                this.renderSplits();
+                this.adaptStopwatchUI();
+                
+                // Auto-stop if we just hit the 4th split
+                if (this.swState.splits.length >= maxSplits && this.swState.running) {
+                     this.swStop();
+                }
+            },
+            
+            swReset() {
+                this.swState.running = false;
+                clearInterval(this.swState.interval);
+                this.swState.elapsedTime = 0;
+                this.swState.splits = [];
+                document.getElementById('sw-display').textContent = "00:00.00";
+                
+                document.getElementById('sw-btn-start').style.display = 'block';
+                document.getElementById('sw-btn-start').textContent = 'Start';
+                document.getElementById('sw-btn-stop').style.display = 'none';
+                document.getElementById('sw-btn-split').style.display = 'none';
+                document.getElementById('sw-btn-save').style.display = 'none';
+                document.getElementById('sw-splits-container').style.display = 'none';
+            },
+            
+            renderSplits() {
+                if (this.swState.splits.length === 0) {
+                    document.getElementById('sw-splits-container').style.display = 'none';
+                    return;
+                }
+                document.getElementById('sw-splits-container').style.display = 'block';
+                const ul = document.getElementById('sw-splits-list');
+                ul.innerHTML = this.swState.splits.map(s => `
+                    <li class="list-item"><strong>${s.leg}:</strong> <span>Split: ${this.formatSwTime(s.splitMs)}</span> | <span>Accum: ${this.formatSwTime(s.totalMs)}</span></li>
+                `).join('');
+            },
+            
+            saveStopwatchState() {
+                 let state = {
+                    meet: document.getElementById('sw-meet').value,
+                    athlete: document.getElementById('sw-athlete').value,
+                    event: document.getElementById('sw-event').value
+                 };
+                 localStorage.setItem('trackTrackerSwState', JSON.stringify(state));
+            },
+
+            loadStopwatchState() {
+                 let stored = localStorage.getItem('trackTrackerSwState');
+                 if(stored) {
+                     try {
+                         let state = JSON.parse(stored);
+                         if(state.meet) document.getElementById('sw-meet').value = state.meet;
+                         if(state.athlete) {
+                             document.getElementById('sw-athlete').value = state.athlete;
+                             this.updateStopwatchEventDropdown(); // triggers adapt
+                         }
+                         if(state.event) document.getElementById('sw-event').value = state.event;
+                     } catch(e) {}
+                 }
+            },
+            
+            swSave() {
+                if (this.swState.elapsedTime === 0) return;
+                
+                const meetId = document.getElementById('sw-meet').value;
+                const athleteId = document.getElementById('sw-athlete').value;
+                const eventName = document.getElementById('sw-event').value;
+                
+                if (!meetId || !athleteId || !eventName) {
+                    alert('Please select meet, athlete, and event to save bounds.');
+                    return;
+                }
+                
+                // Save overall time
+                const overallResult = {
+                    id: generateUUID(),
+                    meetId,
+                    athleteId,
+                    eventName,
+                    leg: this.swState.splits.length > 0 ? 'Overall Team' : null,
+                    attempt: null,
+                    value: this.formatSwTime(this.swState.elapsedTime),
+                    type: 'WTCH'
+                };
+                this.data.results.push(overallResult);
+                
+                // Save splits
+                this.swState.splits.forEach(s => {
+                    this.data.results.push({
+                        id: generateUUID(),
+                        meetId,
+                        athleteId,
+                        eventName,
+                        leg: s.leg,
+                        attempt: null,
+                        value: this.formatSwTime(s.splitMs),
+                        type: 'WTCH'
+                    });
+                });
+                
+                this.saveData();
+                this.showToast('Stopwatch records saved cleanly to results database!');
+                this.swReset();
+                this.renderResultsTable();
+                this.updateResultsBadge();
             }
         };
 
