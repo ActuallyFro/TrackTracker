@@ -7,9 +7,10 @@
     <style>
         :root {
             --primary: #2563eb;
-            --primary-hover: #1d4ed8;
+            --secondary: #1e40af;
             --bg-body: #f1f5f9;
             --bg-card: #ffffff;
+            --table-bg: #ffffff;
             --text-main: #0f172a;
             --text-muted: #64748b;
             --border: #e2e8f0;
@@ -19,9 +20,10 @@
         @media (prefers-color-scheme: dark) {
             :root {
                 --primary: #3b82f6;
-                --primary-hover: #60a5fa;
+                --secondary: #2563eb;
                 --bg-body: #0f172a;
                 --bg-card: #1e293b;
+                --table-bg: #1e293b;
                 --text-main: #f8fafc;
                 --text-muted: #94a3b8;
                 --border: #334155;
@@ -38,7 +40,7 @@
         }
 
         header {
-            background-color: var(--primary);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
             padding: 1rem;
             text-align: center;
@@ -80,13 +82,8 @@
             margin: 0 auto;
         }
 
-        section {
-            display: none;
-        }
-
-        section.active {
-            display: block;
-        }
+        section { display: none; }
+        section.active { display: block; }
 
         .card {
             background: var(--bg-card);
@@ -98,6 +95,7 @@
         }
 
         h2 { margin-bottom: 1rem; }
+        h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
         
         .form-group { margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
@@ -109,6 +107,9 @@
             background: var(--bg-card);
             color: var(--text-main);
         }
+        
+        /* Apply custom tooltips hint on hover for touch hints on inputs */
+        input[title], select[title] { cursor: help; }
 
         button.btn {
             background-color: var(--primary);
@@ -121,13 +122,11 @@
             width: 100%;
         }
 
-        button.btn:hover { background-color: var(--primary-hover); }
+        button.btn:hover { opacity: 0.9; }
         button.btn-danger { background-color: var(--danger); margin-top: 1rem; }
+        button.icon-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: white; }
 
-        .list-group {
-            list-style: none;
-            margin-top: 1rem;
-        }
+        .list-group { list-style: none; margin-top: 1rem; }
         .list-item {
             padding: 1rem;
             border: 1px solid var(--border);
@@ -143,12 +142,15 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 1rem;
+            background-color: var(--table-bg);
+            color: var(--text-main);
         }
         th, td {
             padding: 0.75rem;
             text-align: left;
             border-bottom: 1px solid var(--border);
         }
+        th { font-weight: 600; }
         
         .controls {
             display: flex;
@@ -157,131 +159,71 @@
         }
 
         .hidden { display: none !important; }
+
+        /* Modal specific */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content {
+            background: var(--bg-card); border-radius: 8px; width: 90%; max-width: 450px;
+            padding: 1.5rem; max-height: 90vh; overflow-y: auto; position: relative;
+        }
+        .close-btn { position: absolute; right: 1rem; top: 1rem; font-size: 1.5rem; cursor: pointer; background:none; border:none; color: var(--text-main); }
+        .setting-color-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .setting-color-row input[type="color"] { width: 50px; height: 35px; border: none; padding: 0; background: none; }
     </style>
 </head>
 <body>
+    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <header>
-        <h1>TrackTracker v0.1.0</h1>
-        <div>
-            <button onclick="app.exportData()" style="padding: 0.5rem; cursor:pointer;">Export JSON</button>
+        <h1>TrackTracker v0.2.0</h1>
+        <div style="display:flex; gap:1rem; align-items:center;">
+            <button class="icon-btn" onclick="app.toggleEditMode()" id="btn-edit-mode" title="Enable Edit Mode">🔒</button>
+            <button class="icon-btn" onclick="app.openSettings()" title="Settings & Backup">⚙️</button>
         </div>
     </header>
 
     <nav>
-        <button class="nav-btn active" data-target="dashboard">Dashboard</button>
-        <button class="nav-btn" data-target="athletes">Athletes</button>
-        <button class="nav-btn" data-target="meets">Meets</button>
-        <button class="nav-btn" data-target="results">Results</button>
+        <button class="nav-btn active" data-target="results" id="nav-btn-results" title="View historical results database">Results</button>
+        <button class="nav-btn" data-target="recorder" title="Input new meet performances">Recorder</button>
+        <button class="nav-btn" data-target="meets" title="Manage your track meets">Meets</button>
+        <button class="nav-btn" data-target="athletes" title="Manage your athletes">Athletes</button>
     </nav>
 
     <main>
-        <!-- DASHBOARD -->
-        <section id="dashboard" class="active">
-            <div class="card">
-                <h2>Welcome to TrackTracker SPA</h2>
-                <p>Manage Ohio Middle School Track and Field (2026) data offline.</p>
-                <div class="controls" style="margin-top: 1rem">
-                    <button class="btn" onclick="document.getElementById('import-file').click()">Import JSON</button>
-                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="app.importData(event)">
-                </div>
-            </div>
-            <div class="card">
-                <h3>Statistics</h3>
-                <p>Total Athletes: <span id="stat-athletes">0</span></p>
-                <p>Total Meets: <span id="stat-meets">0</span></p>
-                <p>Total Results: <span id="stat-results">0</span></p>
-            </div>
-        </section>
-
-        <!-- ATHLETES -->
-        <section id="athletes">
-            <div class="card">
-                <h2>Add Athlete</h2>
-                <form id="form-athlete" onsubmit="app.addAthlete(event)">
-                    <div class="form-group">
-                        <label>Name</label>
-                        <input type="text" id="ath-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Gender</label>
-                        <select id="ath-gender" required>
-                            <option value="Girls">Girls</option>
-                            <option value="Boys">Boys</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Grade Level</label>
-                        <input type="number" id="ath-grade" min="6" max="8" value="7" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Team/School</label>
-                        <input type="text" id="ath-team" required>
-                    </div>
-                    <button type="submit" class="btn">Save Athlete</button>
-                </form>
-            </div>
-            <div class="card">
-                <h2>Athlete List</h2>
-                <ul class="list-group" id="list-athletes"></ul>
-            </div>
-        </section>
-
-        <!-- MEETS -->
-        <section id="meets">
-            <div class="card">
-                <h2>Add Meet</h2>
-                <form id="form-meet" onsubmit="app.addMeet(event)">
-                    <div class="form-group">
-                        <label>Meet Name</label>
-                        <input type="text" id="meet-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="meet-date" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Location</label>
-                        <input type="text" id="meet-location">
-                    </div>
-                    <button type="submit" class="btn">Save Meet</button>
-                </form>
-            </div>
-            <div class="card">
-                <h2>Meet List</h2>
-                <ul class="list-group" id="list-meets"></ul>
-            </div>
-        </section>
-
-        <!-- RESULTS -->
-        <section id="results">
-            <div class="card">
-                <h2>Add Result</h2>
-                <form id="form-result" onsubmit="app.addResult(event)">
-                    <div class="form-group">
-                        <label>Meet</label>
-                        <select id="res-meet" required></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Athlete</label>
-                        <select id="res-athlete" required onchange="app.updateEventDropdown()"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Event</label>
-                        <select id="res-event" required></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Result/Performance</label>
-                        <input type="text" id="res-value" placeholder="MM:SS.MS or FT-IN" required>
-                    </div>
-                    <button type="submit" class="btn">Save Result</button>
-                </form>
-            </div>
+        <!-- 1. RESULTS TAB -->
+        <section id="results" class="active">
             <div class="card" style="overflow-x: auto;">
-                <h2>Results Database</h2>
-                <div class="form-group">
-                    <input type="text" id="filter-results" placeholder="Search by name, event, meet..." onkeyup="app.renderResultsTable()">
+                <h2>Meet Results</h2>
+                
+                <!-- Search & Filters -->
+                <div class="controls" style="flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px; display: flex; align-items: center; background: var(--bg-body); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.5rem;">
+                        <span title="Search across all text">🔍</span>
+                        <input type="text" id="search-global" placeholder="Search..." title="Type to fuzzy search across event name, athlete, or meet" onkeyup="app.renderResultsTable()" style="border: none; background: transparent; padding: 0.75rem; width: 100%; outline: none; color: var(--text-main);">
+                    </div>
+                    <button class="btn" style="width: auto;" onclick="app.toggleFilters()" title="Toggle advanced column filtering">⚙️ Filter</button>
                 </div>
+                
+                <!-- Expanded Filters -->
+                <div id="advanced-filters" class="hidden" style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Meet</label>
+                        <select id="filter-meet" onchange="app.renderResultsTable()" style="width:100%; padding:0.5rem;" title="Filter to a specific meet"></select>
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Athlete</label>
+                        <select id="filter-athlete" onchange="app.renderResultsTable()" style="width:100%; padding:0.5rem;" title="Filter exactly by an athlete's name"></select>
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <label style="font-size:0.8rem; font-weight:bold;">Event</label>
+                        <select id="filter-event" onchange="app.renderResultsTable()" style="width:100%; padding:0.5rem;" title="Filter exactly by the track/field event"></select>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
                 <table>
                     <thead>
                         <tr>
@@ -290,14 +232,182 @@
                             <th>Athlete</th>
                             <th>Event</th>
                             <th>Result</th>
-                            <th>Action</th>
+                            <th class="action-header" style="display:none;">Action</th>
                         </tr>
                     </thead>
                     <tbody id="table-results"></tbody>
                 </table>
             </div>
         </section>
+
+        <!-- 2. RECORDER TAB (New Location for Data Entry) -->
+        <section id="recorder">
+            <div class="card">
+                <h2>Record Performance</h2>
+                <form id="form-result" onsubmit="app.addResult(event)">
+                    <div class="form-group">
+                        <label>Meet</label>
+                        <select id="res-meet" required title="Select the track meet location/date" onchange="app.saveRecorderState()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Athlete</label>
+                        <select id="res-athlete" required onchange="app.updateEventDropdown(); app.saveRecorderState()" title="Select the competing athlete"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Event</label>
+                        <select id="res-event" required title="Select the specific Ohio track or field event" onchange="app.saveRecorderState(); app.adaptRecorderFormUI();"></select>
+                    </div>
+                    <div class="form-group" id="fg-leg" style="display:none;">
+                        <label>Relay Leg</label>
+                        <select id="res-leg" title="Select if this is an individual leg split or the overall team time" onchange="app.saveRecorderState()">
+                            <option value="Overall Team">Overall Team Time</option>
+                            <option value="Leg 1">Leg 1 Split</option>
+                            <option value="Leg 2">Leg 2 Split</option>
+                            <option value="Leg 3">Leg 3 Split</option>
+                            <option value="Leg 4">Leg 4 Split</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="fg-attempt" style="display:none;">
+                        <label>Attempt / Round</label>
+                        <select id="res-attempt" title="Select the attempt number" onchange="app.saveRecorderState()">
+                            <option value="Best/Final">Final / Best</option>
+                            <option value="Attempt 1">Attempt 1</option>
+                            <option value="Attempt 2">Attempt 2</option>
+                            <option value="Attempt 3">Attempt 3</option>
+                            <option value="Attempt 4">Attempt 4</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Result/Performance</label>
+                        <input type="text" id="res-value" placeholder="15.2 or 18-5" required title="Enter time (15.2) or distance (18-5)">
+                        <small style="font-size: 0.8rem; color: var(--text-muted);">Will auto-format to MM:SS.MS (e.g., 00:15.20) or FT-IN.xx (e.g., 18-05.00)</small>
+                    </div>
+                    <button type="submit" class="btn" title="Save this performance record">Save Result</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- 3. MEETS TAB -->
+        <section id="meets">
+            <div class="card">
+                <h2>Add Meet</h2>
+                <form id="form-meet" onsubmit="app.addMeet(event)">
+                    <div class="form-group">
+                        <label>Meet Name</label>
+                        <input type="text" id="meet-name" required title="Enter the name of the track meet (e.g., 'County Invitational')">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="meet-date" required title="Select the calendar date of the meet">
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" id="meet-location" title="Enter the host school or facility name (optional)">
+                    </div>
+                    <button type="submit" class="btn" title="Add this meet to your season record">Save Meet</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>Meet List</h2>
+                <ul class="list-group" id="list-meets"></ul>
+            </div>
+        </section>
+
+        <!-- 4. ATHLETES TAB -->
+        <section id="athletes">
+            <div class="card">
+                <h2>Add Athlete</h2>
+                <form id="form-athlete" onsubmit="app.addAthlete(event)">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="ath-name" required title="Enter the athlete's first and last name">
+                    </div>
+                    <div class="form-group">
+                        <label>Gender (Division)</label>
+                        <select id="ath-gender" required title="Selecting gender ensures the proper Ohio event choices appear in the Recorder">
+                            <option value="Girls">Girls</option>
+                            <option value="Boys">Boys</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Grade Level</label>
+                        <input type="number" id="ath-grade" min="6" max="8" value="7" required title="Enter the athlete's current Middle School grade (6-8)">
+                    </div>
+                    <div class="form-group">
+                        <label>Team/School</label>
+                        <input type="text" id="ath-team" required title="Enter the school name representing this athlete">
+                    </div>
+                    <button type="submit" class="btn" title="Add athlete to your roster">Save Athlete</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>Athlete List</h2>
+                <ul class="list-group" id="list-athletes"></ul>
+            </div>
+        </section>
     </main>
+
+    <!-- SETTINGS MODAL -->
+    <div id="modal-settings" class="modal hidden">
+        <div class="modal-content">
+            <button class="close-btn" onclick="app.closeSettings()" title="Close Settings">×</button>
+            <h2>Settings</h2>
+            
+            <section style="display:block; margin-top:1rem;">
+                <h3>Dashboard Stats</h3>
+                <div style="display:flex; justify-content:space-between; background:var(--bg-body); padding:1rem; border-radius:4px; margin-bottom:1rem;">
+                    <div style="text-align:center;"><strong>Athletes</strong><br><span id="stat-athletes">0</span></div>
+                    <div style="text-align:center;"><strong>Meets</strong><br><span id="stat-meets">0</span></div>
+                    <div style="text-align:center;"><strong>Results</strong><br><span id="stat-results">0</span></div>
+                </div>
+                
+                <hr style="margin: 1.5rem 0; border-color: var(--border);">
+
+                <h3>School Settings (Colors)</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Personalize the app with your team colors.</p>
+                <div class="setting-color-row">
+                    <label for="color-primary" title="Primary color used for buttons and main accents">Primary Color</label>
+                    <input type="color" id="color-primary" onchange="app.updateColors()">
+                </div>
+                <div class="setting-color-row">
+                    <label for="color-secondary" title="Secondary color used along with Primary in the top header gradient">Secondary Color</label>
+                    <input type="color" id="color-secondary" onchange="app.updateColors()">
+                </div>
+                
+                <hr style="margin: 1.5rem 0; border-color: var(--border);">
+
+                <h3>Table Settings</h3>
+                <div class="setting-color-row">
+                    <label for="color-table" title="Specific background color used for the results data table">Table Color</label>
+                    <input type="color" id="color-table" onchange="app.updateColors()">
+                </div>
+
+                <hr style="margin: 1.5rem 0; border-color: var(--border);">
+
+                <h3>UI Settings</h3>
+                <div class="setting-color-row">
+                    <label for="setting-show-totals" title="Show total records counted on the Results navigation tab">Show Record Totals on Label</label>
+                    <input type="checkbox" id="setting-show-totals" onchange="app.updateSettings()">
+                </div>
+
+                <hr style="margin: 1.5rem 0; border-color: var(--border);">
+
+                <h3>Data Backup & Restore</h3>
+                <div style="display:flex; gap:0.5rem; margin-top:1rem;">
+                    <button class="btn" style="flex:1;" onclick="app.exportData()" title="Download your data to a JSON file">Export JSON</button>
+                    <button class="btn" style="flex:1; background-color:var(--text-muted);" onclick="document.getElementById('import-file').click()" title="Restore data from a JSON file">Import JSON</button>
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="app.importData(event)">
+                </div>
+                
+                <hr style="margin: 1.5rem 0; border-color: var(--border);">
+                
+                <h3 style="color: var(--danger);">Danger Zone</h3>
+                <div style="margin-top:1rem;">
+                    <button class="btn" style="width:100%; background-color:var(--danger);" onclick="app.clearAllData()" title="Wipe all locally stored records and app state">Clear All Data</button>
+                </div>
+            </section>
+        </div>
+    </div>
 
     <script>
         // Data Models
@@ -341,10 +451,15 @@
         const generateUUID = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
         const app = {
-            data: { athletes: [], meets: [], results: [] },
+            data: { 
+                athletes: [], meets: [], results: [], 
+                settings: { primary: '#2563eb', secondary: '#1e40af', table: '', showTotals: false }
+            },
+            isEditMode: false,
 
             init() {
                 this.loadData();
+                this.applyColors();
                 this.setupNav();
                 this.refreshUI();
             },
@@ -353,7 +468,10 @@
                 const stored = localStorage.getItem('trackTrackerData');
                 if (stored) {
                     try {
-                        this.data = JSON.parse(stored);
+                        const parsed = JSON.parse(stored);
+                        this.data = { ...this.data, ...parsed };
+                        // Ensure settings exists
+                        if(!this.data.settings) this.data.settings = { primary: '#2563eb', secondary: '#1e40af', table: '', showTotals: false };
                     } catch (e) {
                         console.error('Failed to parse local storage data');
                     }
@@ -365,27 +483,192 @@
                 this.refreshUI();
             },
 
+            // --- TAB NAVIGATION & STATE ---
             setupNav() {
+                // Restore last viewed tab or default to 'results'
+                const target = localStorage.getItem('trackTrackerTab') || 'results';
+                this.activateTab(target);
+
+                // Listen to clicks
                 document.querySelectorAll('.nav-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
-                        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-                        document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-                        
-                        e.target.classList.add('active');
-                        document.getElementById(e.target.dataset.target).classList.add('active');
+                        this.activateTab(e.target.dataset.target);
                     });
                 });
             },
 
-            refreshUI() {
-                document.getElementById('stat-athletes').textContent = this.data.athletes.length;
-                document.getElementById('stat-meets').textContent = this.data.meets.length;
-                document.getElementById('stat-results').textContent = this.data.results.length;
+            activateTab(target) {
+                // Nav UI
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.target === target));
+                // Section UI
+                document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === target));
+                
+                // Persist State
+                localStorage.setItem('trackTrackerTab', target);
+            },
 
+            toggleEditMode() {
+                this.isEditMode = !this.isEditMode;
+                const btn = document.getElementById('btn-edit-mode');
+                if(this.isEditMode) {
+                    btn.textContent = '🔓';
+                    btn.title = 'Disable Edit Mode (Currently Writable)';
+                    btn.style.color = '#ef4444'; // Red to indicate caution
+                } else {
+                    btn.textContent = '🔒';
+                    btn.title = 'Enable Edit Mode (Currently Read-Only)';
+                    btn.style.color = 'white';
+                }
+                this.refreshUI();
+            },
+
+            refreshUI() {
+                // Remove the read-only messages globally if they still exist from previous logic
+                document.querySelectorAll('.readonly-msg').forEach(el => el.remove());
+                
+                // Ensure all forms are always visible for data entry
+                document.querySelectorAll('form').forEach(f => {
+                    const formCard = f.closest('.card');
+                    if (formCard) formCard.style.display = 'block';
+                });
+
+                // Toggle action headers in results table
+                document.querySelectorAll('.action-header').forEach(el => {
+                    el.style.display = this.isEditMode ? 'table-cell' : 'none';
+                });
+
+                // Refresh standard components
                 this.renderAthletes();
                 this.renderMeets();
                 this.renderDropdowns();
                 this.renderResultsTable();
+                this.updateResultsBadge();
+            },
+
+            // --- SETTINGS (Colors, Mods, Import/Export) ---
+            openSettings() {
+                // Update stats
+                document.getElementById('stat-athletes').textContent = this.data.athletes.length;
+                document.getElementById('stat-meets').textContent = this.data.meets.length;
+                document.getElementById('stat-results').textContent = this.data.results.length;
+
+                // Bind color inputs UI
+                document.getElementById('color-primary').value = this.data.settings.primary || '#2563eb';
+                document.getElementById('color-secondary').value = this.data.settings.secondary || '#1e40af';
+                document.getElementById('color-table').value = this.data.settings.table || '#ffffff';
+                document.getElementById('setting-show-totals').checked = !!this.data.settings.showTotals;
+                
+                // Show modal
+                document.getElementById('modal-settings').classList.remove('hidden');
+            },
+
+            closeSettings() {
+                document.getElementById('modal-settings').classList.add('hidden');
+            },
+
+            updateSettings() {
+                this.data.settings.showTotals = document.getElementById('setting-show-totals').checked;
+                this.saveData();
+                this.updateResultsBadge();
+            },
+
+            updateResultsBadge() {
+                const btn = document.getElementById('nav-btn-results');
+                if (this.data.settings.showTotals) {
+                    btn.textContent = `Results (${this.data.results.length})`;
+                } else {
+                    btn.textContent = `Results`;
+                }
+            },
+
+            showToast(message) {
+                const container = document.getElementById('toast-container');
+                if (!container) return;
+                const toast = document.createElement('div');
+                toast.style.background = 'var(--primary)';
+                toast.style.color = '#fff';
+                toast.style.padding = '10px 20px';
+                toast.style.borderRadius = '4px';
+                toast.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                toast.style.transition = 'opacity 0.3s ease-out';
+                toast.textContent = message;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            },
+
+            updateColors() {
+                this.data.settings.primary = document.getElementById('color-primary').value;
+                this.data.settings.secondary = document.getElementById('color-secondary').value;
+                this.data.settings.table = document.getElementById('color-table').value;
+                
+                this.applyColors();
+                this.saveData();
+            },
+
+            applyColors() {
+                const s = this.data.settings;
+                if(s.primary) document.documentElement.style.setProperty('--primary', s.primary);
+                if(s.secondary) document.documentElement.style.setProperty('--secondary', s.secondary);
+                if(s.table) document.documentElement.style.setProperty('--table-bg', s.table);
+            },
+
+            exportData() {
+                const blob = new Blob([JSON.stringify(this.data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `TrackTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            },
+
+            importData(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        if (importedData.athletes && importedData.meets && importedData.results) {
+                            this.data = importedData;
+                            this.saveData();
+                            this.applyColors();
+                            this.closeSettings();
+                            alert('Data imported successfully!');
+                        } else {
+                            alert('Invalid TrackTracker JSON format.');
+                        }
+                    } catch (err) {
+                        alert('Error reading JSON file.');
+                    }
+                    e.target.value = ''; // reset file input
+                };
+                reader.readAsText(file);
+            },
+
+            clearAllData() {
+                if(confirm('WARNING: Are you sure you want to completely erase ALL athletes, meets, and results? This action cannot be undone. You may want to export a backup first.')) {
+                    // Reset to defaults
+                    this.data = { 
+                        athletes: [], 
+                        meets: [], 
+                        results: [], 
+                        settings: { primary: '#2563eb', secondary: '#1e40af', table: '', showTotals: false }
+                    };
+                    
+                    this.saveData();
+                    this.applyColors();
+                    this.closeSettings();
+                    this.refreshUI();
+                    
+                    this.showToast('All app data has been successfully cleared.');
+                }
             },
 
             // --- ATHLETES ---
@@ -418,7 +701,7 @@
                         <div>
                             <strong>${a.name}</strong> (${a.gender}, Gr ${a.grade}) - ${a.team}
                         </div>
-                        <button onclick="app.deleteAthlete('${a.id}')" style="color:red; background:none; border:none; cursor:pointer;">Delete</button>
+                        ${this.isEditMode ? `<button onclick="app.deleteAthlete('${a.id}')" style="color:red; background:none; border:none; cursor:pointer;" title="Delete Athlete">Delete</button>` : ''}
                     </li>
                 `).join('');
             },
@@ -453,13 +736,49 @@
                         <div>
                             <strong>${m.name}</strong> (${m.date}) - ${m.location}
                         </div>
-                        <button onclick="app.deleteMeet('${m.id}')" style="color:red; background:none; border:none; cursor:pointer;">Delete</button>
+                        ${this.isEditMode ? `<button onclick="app.deleteMeet('${m.id}')" style="color:red; background:none; border:none; cursor:pointer;" title="Delete Meet">Delete</button>` : ''}
                     </li>
                 `).join('');
             },
 
-            // --- RESULTS ---
+            // --- RESULTS (RECORDER + VIEW) ---
+            saveRecorderState() {
+                const meetId = document.getElementById('res-meet').value;
+                const athId = document.getElementById('res-athlete').value;
+                const eventName = document.getElementById('res-event').value;
+                const leg = document.getElementById('res-leg').value;
+                const attempt = document.getElementById('res-attempt').value;
+                
+                // Safe check - don't overwrite if it's resetting
+                if(meetId || athId || eventName) {
+                    const state = { meetId, athId, eventName, leg, attempt };
+                    localStorage.setItem('trackTrackerRecorderState', JSON.stringify(state));
+                }
+            },
+
+            loadRecorderState() {
+                try {
+                    const saved = localStorage.getItem('trackTrackerRecorderState');
+                    if(saved) {
+                        const state = JSON.parse(saved);
+                        if(state.meetId) document.getElementById('res-meet').value = state.meetId;
+                        if(state.athId) {
+                            document.getElementById('res-athlete').value = state.athId;
+                            this.updateEventDropdown(); // regenerate dynamic events based on athlete sex
+                            // Have to wait for options to construct to apply event
+                            setTimeout(() => {
+                                if(state.eventName) document.getElementById('res-event').value = state.eventName;
+                                this.adaptRecorderFormUI();
+                                if(state.leg) document.getElementById('res-leg').value = state.leg;
+                                if(state.attempt) document.getElementById('res-attempt').value = state.attempt;
+                            }, 50);
+                        }
+                    }
+                } catch(e) {}
+            },
+
             renderDropdowns() {
+                // Populate Add Result (Recorder) Dropdowns
                 const athSelect = document.getElementById('res-athlete');
                 athSelect.innerHTML = '<option value="">Select Athlete...</option>' + 
                     this.data.athletes.map(a => `<option value="${a.id}">${a.name} (${a.gender})</option>`).join('');
@@ -468,7 +787,19 @@
                 meetSelect.innerHTML = '<option value="">Select Meet...</option>' + 
                     this.data.meets.map(m => `<option value="${m.id}">${m.name} - ${m.date}</option>`).join('');
                 
+                // Populate Filter Dropdowns
+                document.getElementById('filter-meet').innerHTML = '<option value="">All Meets</option>' + 
+                    this.data.meets.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+                
+                document.getElementById('filter-athlete').innerHTML = '<option value="">All Athletes</option>' + 
+                    this.data.athletes.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+                
+                const allEvents = [...new Set([...OHIO_EVENTS.Girls.map(e=>e.name), ...OHIO_EVENTS.Boys.map(e=>e.name)])];
+                document.getElementById('filter-event').innerHTML = '<option value="">All Events</option>' + 
+                    allEvents.map(e => `<option value="${e}">${e}</option>`).join('');
+
                 this.updateEventDropdown();
+                this.loadRecorderState();
             },
 
             updateEventDropdown() {
@@ -476,6 +807,7 @@
                 const evtSelect = document.getElementById('res-event');
                 if(!athId) {
                     evtSelect.innerHTML = '<option value="">Select athlete first</option>';
+                    this.adaptRecorderFormUI();
                     return;
                 }
                 
@@ -483,20 +815,85 @@
                 const events = OHIO_EVENTS[athlete.gender] || [];
                 
                 evtSelect.innerHTML = events.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+                this.adaptRecorderFormUI();
+            },
+
+            adaptRecorderFormUI() {
+                const eventName = document.getElementById('res-event').value || '';
+                const isRelay = eventName.toLowerCase().includes('relay');
+                const isField = ['discus', 'jump', 'shot put'].some(keyword => eventName.toLowerCase().includes(keyword));
+
+                document.getElementById('fg-leg').style.display = isRelay ? 'block' : 'none';
+                document.getElementById('fg-attempt').style.display = isField ? 'block' : 'none';
             },
 
             addResult(e) {
                 e.preventDefault();
+                
+                let rawValue = document.getElementById('res-value').value.trim();
+                
+                // Fuzzy/lenient parsing for Track Times
+                // If it looks like a time but is missing parts (e.g. "15.2" -> "00:15.20")
+                if (rawValue.match(/^(\d{1,2}:)?\d{1,2}\.\d{1,2}$/)) {
+                    let parts = rawValue.split(':');
+                    let minutes = "00";
+                    let secondsAndMs = rawValue;
+                    
+                    if (parts.length === 2) {
+                        minutes = parts[0].padStart(2, '0');
+                        secondsAndMs = parts[1];
+                    }
+                    
+                    let timeParts = secondsAndMs.split('.');
+                    let seconds = timeParts[0].padStart(2, '0');
+                    let ms = timeParts[1].padEnd(2, '0');
+                    
+                    rawValue = `${minutes}:${seconds}.${ms}`;
+                }
+                
+                // Fuzzy/lenient parsing for Field Distances
+                // e.g. "18" -> "18-00.00", "18-5" -> "18-05.00", "18-5.5" -> "18-05.50"
+                if (rawValue.match(/^\d{1,3}(-\d{1,2}(\.\d{1,2})?)?$/)) {
+                    let parts = rawValue.split('-');
+                    let feet = parts[0];
+                    let inches = "00";
+                    let fractions = "00";
+                    
+                    if (parts.length === 2) {
+                        let inchParts = parts[1].split('.');
+                        inches = inchParts[0].padStart(2, '0');
+                        if (inchParts.length === 2) {
+                            fractions = inchParts[1].padEnd(2, '0');
+                        }
+                    }
+                    
+                    rawValue = `${feet}-${inches}.${fractions}`;
+                    // Note: If they just typed "15", it might be a time "15.00" or distance "15-00.00".
+                    // The regex above catches pure numbers as distance by default.
+                }
+
+                const isRelay = document.getElementById('fg-leg').style.display !== 'none';
+                const isField = document.getElementById('fg-attempt').style.display !== 'none';
+
                 const result = {
                     id: generateUUID(),
                     meetId: document.getElementById('res-meet').value,
                     athleteId: document.getElementById('res-athlete').value,
                     eventName: document.getElementById('res-event').value,
-                    value: document.getElementById('res-value').value
+                    leg: isRelay ? document.getElementById('res-leg').value : null,
+                    attempt: isField ? document.getElementById('res-attempt').value : null,
+                    value: rawValue
                 };
+                
                 this.data.results.push(result);
                 this.saveData();
                 document.getElementById('res-value').value = ''; // keep meet/athlete selected for quick add
+
+                this.showToast('Result added successfully!');
+                
+                // Auto-refresh the results table so it appears
+                this.renderResultsTable(); 
+                this.updateResultsBadge();
             },
 
             deleteResult(id) {
@@ -506,9 +903,19 @@
                 }
             },
 
+            toggleFilters() {
+                const filterSec = document.getElementById('advanced-filters');
+                filterSec.classList.toggle('hidden');
+            },
+
             renderResultsTable() {
                 const tbody = document.getElementById('table-results');
-                const filterText = document.getElementById('filter-results').value.toLowerCase();
+                if(!tbody) return;
+
+                const globalFilter = document.getElementById('search-global').value.toLowerCase();
+                const meetFilter = document.getElementById('filter-meet').value;
+                const athleteFilter = document.getElementById('filter-athlete').value;
+                const eventFilter = document.getElementById('filter-event').value;
                 
                 let html = '';
                 
@@ -523,58 +930,32 @@
                 enriched.sort((a,b) => new Date(b.meet.date || 0) - new Date(a.meet.date || 0));
 
                 enriched.forEach(r => {
+                    // Specific Selection Filters
+                    if(meetFilter && r.meetId !== meetFilter) return;
+                    if(athleteFilter && r.athleteId !== athleteFilter) return;
+                    if(eventFilter && r.eventName !== eventFilter) return;
+
+                    // Global text fuzzy search
                     const searchStr = `${r.meet.name} ${r.athlete.name} ${r.eventName} ${r.value}`.toLowerCase();
-                    if(filterText && !searchStr.includes(filterText)) return;
+                    if(globalFilter && !searchStr.includes(globalFilter)) return;
 
                     html += `
                         <tr>
                             <td>${r.meet.date || 'Unknown'}</td>
                             <td>${r.meet.name || 'Unknown'}</td>
                             <td>${r.athlete.name || 'Unknown'}</td>
-                            <td>${r.eventName}</td>
+                            <td>
+                                ${r.eventName}
+                                ${r.leg ? `<br><small style="color:var(--text-muted)">(${r.leg})</small>` : ''}
+                                ${r.attempt ? `<br><small style="color:var(--text-muted)">(${r.attempt})</small>` : ''}
+                            </td>
                             <td><strong>${r.value}</strong></td>
-                            <td><button onclick="app.deleteResult('${r.id}')" style="color:red; background:none; border:none; cursor:pointer;">Del</button></td>
+                            ${this.isEditMode ? `<td class="action-header"><button onclick="app.deleteResult('${r.id}')" style="color:var(--danger); background:none; border:none; cursor:pointer;" title="Delete Result">Del</button></td>` : ''}
                         </tr>
                     `;
                 });
                 
                 tbody.innerHTML = html;
-            },
-
-            // --- IMPORT / EXPORT ---
-            exportData() {
-                const blob = new Blob([JSON.stringify(this.data, null, 2)], {type: 'application/json'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `TrackTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            },
-
-            importData(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const importedData = JSON.parse(event.target.result);
-                        if (importedData.athletes && importedData.meets && importedData.results) {
-                            this.data = importedData;
-                            this.saveData();
-                            alert('Data imported successfully!');
-                        } else {
-                            alert('Invalid TrackTracker JSON format.');
-                        }
-                    } catch (err) {
-                        alert('Error reading JSON file.');
-                    }
-                    e.target.value = ''; // reset file input
-                };
-                reader.readAsText(file);
             }
         };
 
