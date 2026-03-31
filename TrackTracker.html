@@ -18,16 +18,27 @@
         }
 
         @media (prefers-color-scheme: dark) {
-            :root {
+            :root:not([data-theme="light"]) {
                 --primary: #3b82f6;
                 --secondary: #2563eb;
                 --bg-body: #0f172a;
                 --bg-card: #1e293b;
-                --table-bg: #1e293b;
+                --table-bg: transparent;
                 --text-main: #f8fafc;
                 --text-muted: #94a3b8;
                 --border: #334155;
             }
+        }
+        
+        :root[data-theme="dark"] {
+            --primary: #3b82f6;
+            --secondary: #2563eb;
+            --bg-body: #0f172a;
+            --bg-card: #1e293b;
+            --table-bg: transparent;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -178,7 +189,7 @@
     <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <header>
-        <h1>TrackTracker v0.4.0</h1>
+        <h1>TrackTracker v0.5.0</h1>
         <div style="display:flex; gap:1rem; align-items:center;">
             <button class="icon-btn" onclick="app.toggleEditMode()" id="btn-edit-mode" title="Enable Edit Mode">🔒</button>
             <button class="icon-btn" onclick="app.openSettings()" title="Settings & Backup">⚙️</button>
@@ -452,15 +463,15 @@
                 
                 <hr style="margin: 1.5rem 0; border-color: var(--border);">
 
-                <h3>Table Settings</h3>
-                <div class="setting-color-row">
-                    <label for="color-table" title="Specific background color used for the results data table">Table Color</label>
-                    <input type="color" id="color-table" onchange="app.updateColors()">
-                </div>
-
-                <hr style="margin: 1.5rem 0; border-color: var(--border);">
-
                 <h3>UI Settings</h3>
+                <div class="setting-color-row">
+                    <label for="setting-theme" title="Set to Light, Dark, or System mode">Application Theme</label>
+                    <select id="setting-theme" onchange="app.updateSettings()" style="padding: 0.25rem;">
+                        <option value="system">System Default</option>
+                        <option value="light">Light Mode</option>
+                        <option value="dark">Dark Mode</option>
+                    </select>
+                </div>
                 <div class="setting-color-row">
                     <label for="setting-show-totals" title="Show total records counted on the Results navigation tab">Show Record Totals on Label</label>
                     <input type="checkbox" id="setting-show-totals" onchange="app.updateSettings()">
@@ -535,6 +546,7 @@
 
             init() {
                 this.loadData();
+                this.applyTheme();
                 this.applyColors();
                 this.setupNav();
                 this.refreshUI();
@@ -629,12 +641,12 @@
                 document.getElementById('stat-meets').textContent = this.data.meets.length;
                 document.getElementById('stat-results').textContent = this.data.results.length;
 
-                // Bind color inputs UI
+                // Bind inputs UI
                 document.getElementById('color-primary').value = this.data.settings.primary || '#2563eb';
                 document.getElementById('color-secondary').value = this.data.settings.secondary || '#1e40af';
-                document.getElementById('color-table').value = this.data.settings.table || '#ffffff';
                 document.getElementById('setting-show-totals').checked = !!this.data.settings.showTotals;
-                
+                document.getElementById('setting-theme').value = this.data.settings.theme || 'system';
+
                 // Show modal
                 document.getElementById('modal-settings').classList.remove('hidden');
             },
@@ -645,6 +657,8 @@
 
             updateSettings() {
                 this.data.settings.showTotals = document.getElementById('setting-show-totals').checked;
+                this.data.settings.theme = document.getElementById('setting-theme').value;
+                this.applyTheme();
                 this.saveData();
                 this.updateResultsBadge();
             },
@@ -679,17 +693,26 @@
             updateColors() {
                 this.data.settings.primary = document.getElementById('color-primary').value;
                 this.data.settings.secondary = document.getElementById('color-secondary').value;
-                this.data.settings.table = document.getElementById('color-table').value;
                 
                 this.applyColors();
                 this.saveData();
+            },
+
+            applyTheme() {
+                const theme = this.data.settings.theme || 'system';
+                if (theme === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                } else if (theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
             },
 
             applyColors() {
                 const s = this.data.settings;
                 if(s.primary) document.documentElement.style.setProperty('--primary', s.primary);
                 if(s.secondary) document.documentElement.style.setProperty('--secondary', s.secondary);
-                if(s.table) document.documentElement.style.setProperty('--table-bg', s.table);
             },
 
             exportData() {
@@ -1048,12 +1071,24 @@
                 const container = document.getElementById('events-static-tables');
                 if(!container) return;
                 
-                function buildTable(title, events) {
-                    let rows = events.map((e, idx) => `<tr><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${idx + 1}</td><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${e.name}</td></tr>`).join('');
+                function buildTable(title, events, isTrack) {
+                    let rows = events.map(e => {
+                        let num = "-";
+                        let evtName = e.name;
+                        if (isTrack) {
+                            const parts = e.name.split(' - ');
+                            if (parts.length > 1) {
+                                num = parts[0];
+                                evtName = parts.slice(1).join(' - ');
+                            }
+                        }
+                        return `<tr><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${num}</td><td style="padding:0.25rem 0.5rem; border-bottom:1px solid var(--border);">${evtName}</td></tr>`;
+                    }).join('');
+                    
                     return `<div style="flex:1; background:var(--bg-card); padding:1rem; border:1px solid var(--border); border-radius:4px; min-width:300px;">
                         <h3 style="margin-top:0;">${title}</h3>
-                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                            <thead><tr><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem;">#</th><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem;">Event Name</th></tr></thead>
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem; background-color: transparent;">
+                            <thead><tr><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem; width:50px;">#</th><th style="text-align:left; border-bottom:2px solid var(--border); padding-bottom:0.25rem;">Event Name</th></tr></thead>
                             <tbody>${rows}</tbody>
                         </table>
                     </div>`;
@@ -1068,15 +1103,15 @@
                     `<div style="width:100%; margin-bottom: 2rem;">
                          <h3 style="margin-top:0;">Track Events</h3>
                          <div style="display:flex; flex-wrap:wrap; gap:1rem;">
-                             ${buildTable('Girls', girlsTrack)}
-                             ${buildTable('Boys', boysTrack)}
+                             ${buildTable('Girls', girlsTrack, true)}
+                             ${buildTable('Boys', boysTrack, true)}
                          </div>
                      </div>
                      <div style="width:100%;">
                          <h3 style="margin-top:0;">Field Events</h3>
                          <div style="display:flex; flex-wrap:wrap; gap:1rem;">
-                             ${buildTable('Girls', girlsField)}
-                             ${buildTable('Boys', boysField)}
+                             ${buildTable('Girls', girlsField, false)}
+                             ${buildTable('Boys', boysField, false)}
                          </div>
                      </div>`;
             },

@@ -2,6 +2,8 @@
 
 A completely self-contained, offline-first Single-Page Application (SPA) designed to track middle school track and field events and athlete performance for the Ohio 2026 season.
 
+**Live Demo:** [https://actuallyfro.github.io/TrackTracker/TrackTracker.html](https://actuallyfro.github.io/TrackTracker/TrackTracker.html)
+
 ## Key Features
 
 *   **Zero Dependencies:** Everything is contained within a single `TrackTracker.html` file. No build processes, no npm, no servers.
