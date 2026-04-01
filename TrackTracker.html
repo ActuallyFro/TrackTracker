@@ -212,7 +212,7 @@
     <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <header>
-        <h1>TrackTracker v0.6.0</h1>
+        <h1>TrackTracker v0.7.0</h1>
         <div style="display:flex; gap:1rem; align-items:center;">
             <button class="icon-btn" onclick="app.toggleEditMode()" id="btn-edit-mode" title="Enable Edit Mode">🔒</button>
             <button class="icon-btn" onclick="app.openSettings()" title="Settings & Backup">⚙️</button>
@@ -254,7 +254,7 @@
                     </div>
                     <div style="flex: 1; min-width: 100px;">
                         <label style="font-size:0.8rem; font-weight:bold;">Event</label>
-                        <select id="filter-event" onchange="app.renderResultsTable()" style="width:100%; padding:0.5rem;" title="Filter exactly by the track/field event"></select>
+                        <select id="filter-event" onchange="app.renderResultsTable(); app.contractEventDropdown(this);" onfocus="app.expandEventDropdown(this)" onblur="app.contractEventDropdown(this)" style="width:100%; padding:0.5rem;" title="Filter exactly by the track/field event"></select>
                     </div>
                 </div>
 
@@ -338,7 +338,7 @@
                         </div>
                         <div class="form-group">
                             <label>Event</label>
-                            <select id="sw-event" required onchange="app.checkSwWarning(event, () => { app.saveStopwatchState(); app.adaptStopwatchUI(); })"></select>
+                            <select id="sw-event" required onchange="app.checkSwWarning(event, () => { app.saveStopwatchState(); app.adaptStopwatchUI(); app.contractEventDropdown(event.target); })" onfocus="app.expandEventDropdown(this)" onblur="app.contractEventDropdown(this)"></select>
                         </div>
                     </div>
 
@@ -372,7 +372,7 @@
                     </div>
                     <div class="form-group">
                         <label>Event</label>
-                        <select id="res-event" required title="Select the specific Ohio track or field event" onchange="app.saveRecorderState(); app.adaptRecorderFormUI();"></select>
+                        <select id="res-event" required title="Select the specific Ohio track or field event" onchange="app.saveRecorderState(); app.adaptRecorderFormUI(); app.contractEventDropdown(this);" onfocus="app.expandEventDropdown(this)" onblur="app.contractEventDropdown(this)"></select>
                     </div>
                     <div class="form-group" id="fg-leg" style="display:none;">
                         <label>Relay Leg</label>
@@ -474,7 +474,7 @@
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <h2>Athlete List</h2>
                             <label class="ghost-toggle" title="Show Ghost Runners 👻">
-                                <input type="checkbox" id="toggle-ghost-runners" onchange="app.renderAthletes()">
+                                <input type="checkbox" id="toggle-ghost-runners" onchange="app.toggleGhostRunners()">
                                 <div class="ghost-toggle-track">
                                     <div class="ghost-toggle-thumb">👻</div>
                                 </div>
@@ -923,9 +923,22 @@
                 }
             },
 
+            toggleGhostRunners() {
+                const toggle = document.getElementById('toggle-ghost-runners');
+                if(!this.data.settings) this.data.settings = {};
+                this.data.settings.showGhosts = toggle.checked;
+                this.saveData();
+            },
+
             renderAthletes() {
                 const list = document.getElementById('list-athletes');
-                const showGhosts = document.getElementById('toggle-ghost-runners').checked;
+                const toggle = document.getElementById('toggle-ghost-runners');
+                
+                if (this.data.settings && this.data.settings.showGhosts !== undefined) {
+                    toggle.checked = this.data.settings.showGhosts;
+                }
+                
+                const showGhosts = toggle.checked;
                 const filteredAthletes = this.data.athletes.filter(a => showGhosts || !a.name.startsWith('Ghost Runner'));
 
                 list.innerHTML = filteredAthletes.map(a => `
@@ -1104,13 +1117,35 @@
                 
                 const allEvents = [...new Set([...OHIO_EVENTS.Girls.map(e=>e.name), ...OHIO_EVENTS.Boys.map(e=>e.name)])];
                 document.getElementById('filter-event').innerHTML = '<option value="">All Events</option>' + 
-                    allEvents.map(e => `<option value="${e}">${e}</option>`).join('');
-
-                this.updateEventDropdown();
+                    allEvents.map(e => {
+                        const shortName = this.getShortEventName(e);
+                        return `<option value="${e}" data-fullname="${e}" data-shortname="${shortName}">${shortName}</option>`;
+                    }).join('');
                 this.loadRecorderState();
                 
                 this.updateStopwatchEventDropdown();
                 this.loadStopwatchState();
+            },
+
+            getShortEventName(fullName) {
+                if(!fullName) return '';
+                let short = fullName.replace(' meters', 'm').replace(/ \([^)]*\)/g, '').trim();
+                short = short.replace(/^(\d+) - (.*?) - (.*)$/, '$1 - $3 $2');
+                return short;
+            },
+
+            expandEventDropdown(selectEl) {
+                if(!selectEl) return;
+                Array.from(selectEl.options).forEach(opt => {
+                    if(opt.dataset.fullname) opt.text = opt.dataset.fullname;
+                });
+            },
+
+            contractEventDropdown(selectEl) {
+                if(!selectEl) return;
+                Array.from(selectEl.options).forEach(opt => {
+                    if(opt.dataset.shortname) opt.text = opt.dataset.shortname;
+                });
             },
 
             updateEventDropdown() {
@@ -1125,7 +1160,10 @@
                 const athlete = this.data.athletes.find(a => a.id === athId);
                 const events = OHIO_EVENTS[athlete.gender] || [];
                 
-                evtSelect.innerHTML = events.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+                evtSelect.innerHTML = events.map(e => {
+                    const shortName = this.getShortEventName(e.name);
+                    return `<option value="${e.name}" data-fullname="${e.name}" data-shortname="${shortName}">${shortName}</option>`;
+                }).join('');
                 this.adaptRecorderFormUI();
             },
 
@@ -1450,6 +1488,24 @@
                 lastNotifyTime: 0
             },
             
+            dispatchSwNotification(title, body, silent = true) {
+                if (!("Notification" in window) || Notification.permission !== "granted") return;
+                
+                const opts = {
+                    body: body,
+                    tag: "tracktracker-sw",
+                    silent: silent,
+                    renotify: false
+                };
+
+                // Fall back to standard Notification API without Service Worker
+                try {
+                    new Notification(title, opts);
+                } catch (e) {
+                    console.log("Notification non-ServiceWorker fallback failed: ", e);
+                }
+            },
+
             requestSwNotifications() {
                 if (!("Notification" in window)) {
                     alert("This browser does not support desktop notifications.");
@@ -1457,7 +1513,7 @@
                 }
                 Notification.requestPermission().then(permission => {
                     if (permission === "granted") {
-                        new Notification("Stopwatch", { body: "Notifications explicitly enabled!", tag: "tracktracker-sw", silent: true });
+                        this.dispatchSwNotification("Stopwatch", "Notifications explicitly enabled!", true);
                     }
                 });
             },
@@ -1467,12 +1523,7 @@
                 
                 const now = Date.now();
                 if (now - this.swState.lastNotifyTime >= 1000) { // throttle to 1 updates/sec
-                    new Notification("TrackTracker Stopwatch", {
-                        body: `Time: ${displayTime}`,
-                        tag: "tracktracker-sw",
-                        silent: true,
-                        renotify: false
-                    });
+                    this.dispatchSwNotification("TrackTracker Stopwatch", `⏱️ Time: ${displayTime}`, true);
                     this.swState.lastNotifyTime = now;
                 }
             },
@@ -1513,7 +1564,10 @@
                 const isBoy = athlete && athlete.gender === 'Boys';
                 const events = isBoy ? OHIO_EVENTS['Boys'] : OHIO_EVENTS['Girls'];
                 
-                swEvent.innerHTML = events.filter(e => e.category === 'track').map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+                swEvent.innerHTML = events.filter(e => e.category === 'track').map(e => {
+                    const shortName = this.getShortEventName(e.name);
+                    return `<option value="${e.name}" data-fullname="${e.name}" data-shortname="${shortName}">${shortName}</option>`;
+                }).join('');
                 this.adaptStopwatchUI();
             },
             
@@ -1614,11 +1668,11 @@
                 
                 // Force a final distinct notification
                 if ("Notification" in window && Notification.permission === "granted") {
-                    new Notification("TrackTracker Stopwatch (Stopped)", {
-                        body: `Final Time: ${document.getElementById('sw-display').textContent}`,
-                        tag: "tracktracker-sw",
-                        silent: false
-                    });
+                    this.dispatchSwNotification(
+                        "TrackTracker Stopwatch (Stopped)",
+                        `Final Time: ${document.getElementById('sw-display').textContent}`,
+                        false
+                    );
                 }
                 
                 document.getElementById('sw-btn-start').style.display = 'block';
